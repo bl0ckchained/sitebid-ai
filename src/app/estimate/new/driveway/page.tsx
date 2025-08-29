@@ -49,7 +49,7 @@ export default function NewEstimate() {
   const [profitMargin, setProfitMargin] = useState(0.15);
 
   // Basic validation
-  const errors = useMemo(() => {
+  const errors = useMemo((): string[] => {
     const err: string[] = [];
     if (v.L_ft <= 0 || v.W_ft <= 0) err.push("Length and width must be positive.");
     if (v.base_lift_ft < 0 && v.top_lift_ft <= 0) err.push("At least one stone lift must be > 0.");
@@ -253,8 +253,68 @@ export default function NewEstimate() {
               <b>Exclusions:</b> rock removal, dewatering, unsuitable subgrade remediation, traffic control beyond noted, permits/fees, fabric unless listed.
             </p>
           </Card>
+
+          {/* Printable Quote */}
+          <Card title="Quote (printable)">
+            <div id="printable" className="max-w-none">
+              <h2 className="text-2xl font-bold">Proposal — Driveway</h2>
+              <p className="mt-1 text-sm text-slate-500">SiteBid AI • Your Company Name • (555) 555-5555</p>
+
+              <h3 className="mt-4 font-semibold">Scope</h3>
+              <p>
+                Strip topsoil ~{Math.round(v.strip_T_ft*12)}″ using {v.strip_method === "dozer" ? "dozer" : "excavator"};
+                place {Math.round(v.base_lift_ft*12)}″ base stone and {Math.round(v.top_lift_ft*12)}″ top stone;
+                shape/grade driveway; haul/dispose spoils; {v.compaction_passes > 0 ? `compact (${v.compaction_passes} passes).` : "traffic/track compaction as needed."}
+              </p>
+
+              <h3 className="mt-3 font-semibold">Quantities & Costs</h3>
+              <ul className="list-disc ml-6">
+                <li>Area: {(v.L_ft*v.W_ft).toLocaleString()} ft²</li>
+                <li>Base stone: {calc.V_base_yd3.toFixed(2)} yd³ ({calc.tons_base.toFixed(1)} t) @ ${r.base_stone_ton}/t = {(calc.cost_base_stone).toFixed(2)}</li>
+                <li>Top stone: {calc.V_top_yd3.toFixed(2)} yd³ ({calc.tons_top.toFixed(1)} t) @ ${r.top_stone_ton}/t = {(calc.cost_top_stone).toFixed(2)}</li>
+                <li>Trucking: {calc.trips} trips, {calc.hrs_truck.toFixed(2)} hr @ ${r.trucking_hr}/hr = {(calc.cost_truck).toFixed(2)}</li>
+                <li>Equipment: Dozer {calc.hrs_dozer.toFixed(2)}h, Excavator {calc.hrs_exc.toFixed(2)}h, Loader {calc.hrs_load.toFixed(2)}h{calc.hrs_compact ? `, Roller ${calc.hrs_compact.toFixed(2)}h` : ""} = {(calc.cost_dozer + calc.cost_exc + calc.cost_loader + calc.cost_roller).toFixed(2)}</li>
+                {calc.extrasUSD ? <li>Extras (lump sum): {(calc.extrasUSD).toFixed(2)}</li> : null}
+                <li><b>Subtotal:</b> {(calc.subtotal).toFixed(2)}</li>
+                <li>Overhead {Math.round(overheadPct*100)}% + Contingency {Math.round(contingencyPct*100)}% → <b>Base:</b> {(calc.subtotal*(1+overheadPct+contingencyPct)).toFixed(2)}</li>
+                <li><b>Total (with profit {Math.round(profitMargin*100)}%): {currency((calc.subtotal*(1+overheadPct+contingencyPct))/(1-profitMargin))}</b></li>
+              </ul>
+
+              <h3 className="mt-3 font-semibold">Assumptions</h3>
+              <ul className="list-disc ml-6">
+                <li>Haul RT {v.haul_round_trip_min} min; truck {v.truck_capacity_tons} t @ {Math.round(v.truck_load_factor*100)}% load.</li>
+                <li>Stone densities: base {v.base_density_ton_per_yd3} t/yd³; top {v.top_density_ton_per_yd3} t/yd³.</li>
+                <li>No dewatering; no utility relocations; access ≥ 10 ft.</li>
+              </ul>
+
+              <h3 className="mt-3 font-semibold">Inclusions</h3>
+              <p className="text-sm">Strip & grade, aggregate supply/placement, trucking & disposal, mobilization.</p>
+
+              <h3 className="mt-3 font-semibold">Exclusions</h3>
+              <p className="text-sm">Rock excavation, dewatering, unsuitable subgrade remediation, traffic control beyond noted, permits/fees, geotextile fabric unless listed.</p>
+
+              <p className="mt-4 text-lg font-bold">Price: {currency((calc.subtotal*(1+overheadPct+contingencyPct))/(1-profitMargin))}</p>
+              <p className="text-xs text-slate-500 mt-1">Valid 14 days. Payment terms: Net 15. Scheduling subject to weather and access.</p>
+            </div>
+
+            <div className="mt-4 no-print">
+              <button onClick={() => window.print()} className="rounded-lg border px-3 py-2">
+                Print / Save as PDF
+              </button>
+            </div>
+          </Card>
         </section>
       </div>
+
+      {/* Print CSS: isolates the quote on print */}
+      <style jsx global>{`
+        @media print {
+          body * { visibility: hidden; }
+          #printable, #printable * { visibility: visible; }
+          #printable { position: absolute; left: 0; top: 0; width: 100%; padding: 24px; }
+          .no-print { display: none !important; }
+        }
+      `}</style>
     </main>
   );
 }
