@@ -44,11 +44,11 @@ export default function NewCulvertEstimate() {
   const [endSections, setEndSections] = useState(2); // 0, 1, or 2
   const [asphaltSF, setAsphaltSF] = useState(80); // 0 = none
   const [riprapArea, setRiprapArea] = useState(60); // 0 = none
-  const [riprapThkFt, setRiprapThkFt] = useState(0.5); // in feet (0 = none)
+  const [riprapThkFt, setRiprapThkFt] = useState(0.5); // feet (0 = none)
   const [extrasUSD, setExtrasUSD] = useState(0); // lump-sum extras
 
-  // ** Permit Fees (New Section Added) **
-  const [permitFees, setPermitFees] = useState(0); // Permit fees input
+  // Permit fees (pass-through)
+  const [permitFees, setPermitFees] = useState(0);
 
   // Markups (fractions)
   const [overheadPct, setOverheadPct] = useState(0.1);
@@ -86,9 +86,11 @@ export default function NewCulvertEstimate() {
     });
   }, [v, r, endSections, asphaltSF, riprapArea, riprapThkFt]);
 
-  const subtotalPlusExtras = calc.subtotal + (extrasUSD || 0) + permitFees; // Add permit fees to the total calculation
+  // Totals — permits treated as pass-through (added after profit)
+  const subtotalPlusExtras = calc.subtotal + (extrasUSD || 0);
   const base = subtotalPlusExtras * (1 + overheadPct + contingencyPct);
   const total = base / (1 - profitMargin);
+  const grandTotal = total + (permitFees || 0);
 
   // Guardrails
   const warnings = useMemo(() => {
@@ -98,9 +100,7 @@ export default function NewCulvertEstimate() {
     if (asphaltSF === 0)
       w.push("Asphalt restoration set to 0 — confirm no pavement impacted.");
     if (endSections === 0)
-      w.push(
-        "No end sections selected — confirm headwalls/aprons are not required."
-      );
+      w.push("No end sections selected — confirm headwalls/aprons are not required.");
     return w;
   }, [v.cover_ft, asphaltSF, endSections]);
 
@@ -112,8 +112,7 @@ export default function NewCulvertEstimate() {
   const sTrk = truckingCost / Math.max(calc.subtotal, 1);
   const sEqp = equipCost / Math.max(calc.subtotal, 1);
 
-  const num = (e: React.ChangeEvent<HTMLInputElement>) =>
-    Number(e.target.value);
+  const num = (e: React.ChangeEvent<HTMLInputElement>) => Number(e.target.value);
 
   return (
     <main className="mx-auto max-w-6xl p-6">
@@ -148,7 +147,9 @@ export default function NewCulvertEstimate() {
                 step="0.1"
                 className="input"
                 value={v.invert_depth_ft}
-                onChange={(e) => setV({ ...v, invert_depth_ft: num(e) })}
+                onChange={(e) =>
+                  setV({ ...v, invert_depth_ft: num(e) })
+                }
               />
             </Row>
             <Row label="Cover (ft)">
@@ -166,7 +167,9 @@ export default function NewCulvertEstimate() {
                 step="0.1"
                 className="input"
                 value={v.bedding_t_ft}
-                onChange={(e) => setV({ ...v, bedding_t_ft: num(e) })}
+                onChange={(e) =>
+                  setV({ ...v, bedding_t_ft: num(e) })
+                }
               />
             </Row>
             <Row label="Side clearance (ft)">
@@ -175,14 +178,15 @@ export default function NewCulvertEstimate() {
                 step="0.1"
                 className="input"
                 value={v.side_clearance_ft}
-                onChange={(e) => setV({ ...v, side_clearance_ft: num(e) })}
+                onChange={(e) =>
+                  setV({ ...v, side_clearance_ft: num(e) })
+                }
               />
             </Row>
           </Card>
 
-          {/* Permit Fees Section */}
-          <Card title="Permit Fees">
-            <Row label="Permit Fees ($)">
+          <Card title="Permit Fees (pass-through)">
+            <Row label="Permit fees ($)">
               <input
                 type="number"
                 className="input"
@@ -198,7 +202,9 @@ export default function NewCulvertEstimate() {
                 type="number"
                 className="input"
                 value={v.prod_dig_yd3_per_hr}
-                onChange={(e) => setV({ ...v, prod_dig_yd3_per_hr: num(e) })}
+                onChange={(e) =>
+                  setV({ ...v, prod_dig_yd3_per_hr: num(e) })
+                }
               />
             </Row>
             <Row label="Backfill prod (yd³/hr)">
@@ -216,7 +222,9 @@ export default function NewCulvertEstimate() {
                 type="number"
                 className="input"
                 value={v.truck_capacity_yd3}
-                onChange={(e) => setV({ ...v, truck_capacity_yd3: num(e) })}
+                onChange={(e) =>
+                  setV({ ...v, truck_capacity_yd3: num(e) })
+                }
               />
             </Row>
             <Row label="Round-trip haul (min)">
@@ -224,7 +232,9 @@ export default function NewCulvertEstimate() {
                 type="number"
                 className="input"
                 value={v.haul_round_trip_min}
-                onChange={(e) => setV({ ...v, haul_round_trip_min: num(e) })}
+                onChange={(e) =>
+                  setV({ ...v, haul_round_trip_min: num(e) })
+                }
               />
             </Row>
           </Card>
@@ -235,7 +245,9 @@ export default function NewCulvertEstimate() {
                 type="number"
                 className="input"
                 value={r.excavator_hr}
-                onChange={(e) => setR({ ...r, excavator_hr: num(e) })}
+                onChange={(e) =>
+                  setR({ ...r, excavator_hr: num(e) })
+                }
               />
             </Row>
             <Row label="Trucking ($/hr)">
@@ -243,7 +255,9 @@ export default function NewCulvertEstimate() {
                 type="number"
                 className="input"
                 value={r.trucking_hr}
-                onChange={(e) => setR({ ...r, trucking_hr: num(e) })}
+                onChange={(e) =>
+                  setR({ ...r, trucking_hr: num(e) })
+                }
               />
             </Row>
             <Row label="Bedding ($/yd³)">
@@ -251,7 +265,9 @@ export default function NewCulvertEstimate() {
                 type="number"
                 className="input"
                 value={r.bedding_yd3}
-                onChange={(e) => setR({ ...r, bedding_yd3: num(e) })}
+                onChange={(e) =>
+                  setR({ ...r, bedding_yd3: num(e) })
+                }
               />
             </Row>
             <Row label="Pipe ($/ft)">
@@ -259,7 +275,9 @@ export default function NewCulvertEstimate() {
                 type="number"
                 className="input"
                 value={r.pipe_per_ft}
-                onChange={(e) => setR({ ...r, pipe_per_ft: num(e) })}
+                onChange={(e) =>
+                  setR({ ...r, pipe_per_ft: num(e) })
+                }
               />
             </Row>
             <Row label="End section ($/ea)">
@@ -267,7 +285,9 @@ export default function NewCulvertEstimate() {
                 type="number"
                 className="input"
                 value={r.end_section_each}
-                onChange={(e) => setR({ ...r, end_section_each: num(e) })}
+                onChange={(e) =>
+                  setR({ ...r, end_section_each: num(e) })
+                }
               />
             </Row>
             <Row label="Asphalt ($/sf)">
@@ -275,7 +295,9 @@ export default function NewCulvertEstimate() {
                 type="number"
                 className="input"
                 value={r.asphalt_sf}
-                onChange={(e) => setR({ ...r, asphalt_sf: num(e) })}
+                onChange={(e) =>
+                  setR({ ...r, asphalt_sf: num(e) })
+                }
               />
             </Row>
             <Row label="Riprap ($/yd³)">
@@ -283,7 +305,9 @@ export default function NewCulvertEstimate() {
                 type="number"
                 className="input"
                 value={r.riprap_yd3}
-                onChange={(e) => setR({ ...r, riprap_yd3: num(e) })}
+                onChange={(e) =>
+                  setR({ ...r, riprap_yd3: num(e) })
+                }
               />
             </Row>
             <Row label="Extras (lump sum $)">
@@ -295,13 +319,153 @@ export default function NewCulvertEstimate() {
               />
             </Row>
           </Card>
+
+          <Card title="Restoration & Appurtenances">
+            <Row label="End sections (ea)">
+              <input
+                type="number"
+                className="input"
+                value={endSections}
+                onChange={(e) => setEndSections(num(e))}
+              />
+            </Row>
+            <Row label="Asphalt restore (sf)">
+              <input
+                type="number"
+                className="input"
+                value={asphaltSF}
+                onChange={(e) => setAsphaltSF(num(e))}
+              />
+            </Row>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="text-sm">Riprap area (ft²)</div>
+                <input
+                  type="number"
+                  className="input mt-1 w-full"
+                  value={riprapArea}
+                  onChange={(e) => setRiprapArea(num(e))}
+                />
+              </div>
+              <div>
+                <div className="text-sm">Riprap thickness (ft)</div>
+                <input
+                  type="number"
+                  step="0.1"
+                  className="input mt-1 w-full"
+                  value={riprapThkFt}
+                  onChange={(e) => setRiprapThkFt(num(e))}
+                />
+              </div>
+            </div>
+          </Card>
+
+          <Card title="Markup">
+            <Row label="Overhead (%)">
+              <input
+                type="number"
+                step={1}
+                className="input"
+                value={overheadPct * 100}
+                onChange={(e) => setOverheadPct(Number(e.target.value) / 100)}
+              />
+            </Row>
+            <Row label="Contingency (%)">
+              <input
+                type="number"
+                step={1}
+                className="input"
+                value={contingencyPct * 100}
+                onChange={(e) => setContingencyPct(Number(e.target.value) / 100)}
+              />
+            </Row>
+            <Row label="Profit margin (%)">
+              <input
+                type="number"
+                step={1}
+                className="input"
+                value={profitMargin * 100}
+                onChange={(e) => setProfitMargin(Number(e.target.value) / 100)}
+              />
+            </Row>
+          </Card>
         </section>
 
         {/* Outputs */}
         <section className="space-y-4">
           <Card title="Results">
-            {/* Display errors, warnings, and results */}
-            <div>No data yet, or display the calculated results here.</div>
+            {errors.length > 0 && (
+              <Banner tone="red" title="Fix these:">
+                <ul className="list-disc ml-5 mt-1">
+                  {errors.map((e, i) => (
+                    <li key={i}>{e}</li>
+                  ))}
+                </ul>
+              </Banner>
+            )}
+            {warnings.length > 0 && (
+              <Banner tone="amber" title="Heads up:">
+                <ul className="list-disc ml-5 mt-1">
+                  {warnings.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+              </Banner>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <KV k="Trench width (ft)" v={(v.D_in / 12 + 2 * v.side_clearance_ft).toFixed(2)} />
+              <KV k="Excavation (yd³)" v={calc.V_exc.toFixed(2)} />
+              <KV k="Bedding (yd³)" v={calc.V_bed.toFixed(2)} />
+              <KV k="Backfill (yd³)" v={calc.V_backfill.toFixed(2)} />
+
+              <KV k="Trips" v={`${calc.trips}`} />
+              <KV k="Trucking hours" v={`${calc.hrs_truck.toFixed(2)} h`} />
+              <KV k="Dig hours" v={`${calc.dig_h.toFixed(2)} h`} />
+              <KV k="Backfill hours" v={`${calc.backfill_h.toFixed(2)} h`} />
+
+              <KV k="Materials cost" v={currency(materialsCost)} />
+              <KV k="Trucking cost" v={currency(truckingCost)} />
+              <KV k="Equipment cost" v={currency(equipCost)} />
+
+              <KV k="Extras" v={currency(extrasUSD || 0)} />
+              <KV k="Subtotal" v={currency(subtotalPlusExtras)} />
+
+              <KV k="Base (OH+Cont)" v={currency(base)} />
+              <KV k="Total (with profit)" v={currency(total)} />
+              <KV k="Permit fees (pass-through)" v={currency(permitFees || 0)} />
+              <KV k="Grand Total" v={currency(grandTotal)} />
+            </div>
+
+            <div className="mt-4">
+              <h3 className="font-semibold">Sensitivity (share of subtotal)</h3>
+              <ul className="list-disc ml-5 text-sm mt-1">
+                <li>Materials: {(sMat * 100).toFixed(0)}%</li>
+                <li>Trucking: {(sTrk * 100).toFixed(0)}%</li>
+                <li>Equipment: {(sEqp * 100).toFixed(0)}%</li>
+              </ul>
+            </div>
+          </Card>
+
+          <Card title="Assumptions (auto-print on quote)">
+            <ul className="list-disc ml-5 text-sm">
+              <li>Pipe {v.D_in}" × {v.L_pipe_ft} ft; invert {v.invert_depth_ft} ft; cover {v.cover_ft} ft.</li>
+              <li>Bedding {v.bedding_t_ft} ft; side clearance {v.side_clearance_ft} ft each side.</li>
+              <li>End sections {endSections} ea; asphalt restore {asphaltSF} sf; riprap {riprapArea} ft² × {riprapThkFt} ft.</li>
+              <li>Haul RT {v.haul_round_trip_min} min; truck {v.truck_capacity_yd3} yd³.</li>
+              <li>Overhead {(overheadPct * 100).toFixed(0)}%, Contingency {(contingencyPct * 100).toFixed(0)}%, Profit {(profitMargin * 100).toFixed(0)}%.</li>
+            </ul>
+          </Card>
+
+          <Card title="Inclusions / Exclusions (draft)">
+            <p className="text-sm">
+              <b>Inclusions:</b> trench excavation, bedding, pipe placement, backfill/compaction, trucking/disposal,
+              end sections (if listed), restoration (if listed), mobilization.
+            </p>
+            <p className="text-sm mt-1">
+              <b>Exclusions:</b> rock excavation, dewatering, utility relocations, traffic control beyond noted,
+              permits/fees (listed separately), unsuitable subgrade remediation, paving beyond listed areas.
+            </p>
           </Card>
         </section>
       </div>
@@ -336,5 +500,35 @@ function Row({
       <span className="text-sm text-slate-700">{label}</span>
       <span className="w-48">{children}</span>
     </label>
+  );
+}
+
+function KV({ k, v }: { k: string; v: string }) {
+  return (
+    <div className="rounded-md border border-slate-200 p-2">
+      <div className="text-xs text-slate-500">{k}</div>
+      <div className="font-semibold">{v}</div>
+    </div>
+  );
+}
+
+function Banner({
+  tone,
+  title,
+  children,
+}: {
+  tone: "red" | "amber";
+  title: string;
+  children: React.ReactNode;
+}) {
+  const colors =
+    tone === "red"
+      ? "border-red-300 bg-red-50 text-red-700"
+      : "border-amber-300 bg-amber-50 text-amber-900";
+  return (
+    <div className={`rounded-lg border p-3 mb-2 ${colors}`}>
+      <b>{title}</b>
+      {children}
+    </div>
   );
 }
