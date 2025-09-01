@@ -1,115 +1,306 @@
 "use client";
 
+import Link from "next/link";
+import { COMPANY } from "@/lib/company";
+
 export default function Home() {
   return (
-    <main className="bg-gray-900 text-white min-h-screen p-10 font-sans">
-      <section className="text-center">
-        <h1 className="text-6xl font-extrabold mb-6 text-indigo-600">
-          SiteBid AI
-        </h1>
-        <p className="text-xl mb-8 text-gray-400">
-          AI-Powered Estimating Tool for Excavation Contractors
-        </p>
-        <p className="text-lg mb-6 text-gray-300">
-          Get accurate bids for your projects in seconds, tailored for every
-          excavation need.
-        </p>
-        <div className="space-x-6">
-          <a
-            href="/estimate/new/driveway"
-            className="px-6 py-3 bg-indigo-600 text-lg font-semibold rounded-lg shadow-lg hover:scale-105 transform transition duration-300"
-          >
-            Start Driveway Estimate
-          </a>
-          <a
-            href="/estimate/new/culvert"
-            className="px-6 py-3 bg-green-600 text-lg font-semibold rounded-lg shadow-lg hover:scale-105 transform transition duration-300"
-          >
-            Start Culvert Estimate
-          </a>
+    <div className="bg-gray-900 text-white min-h-screen font-sans">
+      {/* Top Nav */}
+      <header className="sticky top-0 z-40 bg-gray-900/80 backdrop-blur border-b border-gray-800">
+        <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-3 group">
+            {COMPANY.logoUrl ? (
+              <img
+                src={COMPANY.logoUrl}
+                alt={COMPANY.name}
+                className="h-10 w-10 rounded-md ring-1 ring-white/10"
+              />
+            ) : (
+              <div className="h-10 w-10 rounded-md bg-indigo-600 grid place-items-center font-bold">
+                SB
+              </div>
+            )}
+            <span className="text-2xl font-extrabold tracking-tight">
+              <span className="text-indigo-500">SiteBid</span>{" "}
+              <span className="text-white">AI</span>
+            </span>
+          </Link>
+          <nav className="hidden md:flex items-center gap-6 text-sm">
+            <Link href="/company" className="text-gray-300 hover:text-white">
+              Company
+            </Link>
+            <Link href="/company#contact" className="text-gray-300 hover:text-white">
+              Contact
+            </Link>
+            <Link href="/estimate/new" className="text-gray-300 hover:text-white">
+              All Estimators
+            </Link>
+            <Link
+              href="/estimate/new/driveway"
+              className="px-3 py-2 bg-indigo-600 rounded-lg font-semibold hover:scale-105 transition"
+            >
+              Start an Estimate
+            </Link>
+          </nav>
         </div>
-      </section>
+      </header>
 
-      {/* Section 1: Projects Overview */}
-      <section className="mt-16 space-y-12">
-        <div className="text-center">
-          <h2 className="text-4xl font-bold mb-4 text-gray-100">Our Specializations</h2>
-          <p className="text-lg mb-8 text-gray-300">
-            Whether you’re working on a residential driveway or a large septic
-            field, SiteBid AI has you covered. Choose your project type and get
-            an instant, detailed estimate.
+      <main className="mx-auto max-w-7xl p-10">
+        {/* Hero */}
+        <section className="text-center">
+          <h1 className="text-6xl font-extrabold mb-6 text-indigo-500">
+            SiteBid AI
+          </h1>
+          <p className="text-xl mb-2 text-gray-400">
+            AI-Powered Estimating for Excavation Contractors
           </p>
-        </div>
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-8">
-          <ProjectCard
-            title="Driveways"
-            description="Fast, accurate estimates for driveway grading and paving projects."
-            link="/estimate/new/driveway"
-          />
-          <ProjectCard
-            title="Culverts"
-            description="Get precise estimates for culvert installation and drainage projects."
-            link="/estimate/new/culvert"
-          />
-          <ProjectCard
-            title="Ponds"
-            description="Estimate excavation and pond construction costs with ease."
-            link="/estimate/new/pond"
-          />
-          <ProjectCard
-            title="Basements"
-            description="Accurately calculate the cost of digging basements for new homes."
-            link="/estimate/new/basement"
-          />
-          <ProjectCard
-            title="Trench-Work"
-            description="Estimate trenching projects for utility lines, drains, and more."
-            link="/estimate/new/trench"
-          />
-          <ProjectCard
-            title="Septic Systems"
-            description="Get precise quotes for septic system installation and maintenance."
-            link="/estimate/new/septic"
-          />
-        </div>
-      </section>
+          <p className="text-lg mb-6 text-gray-300">
+            Accurate, fast bids tailored to your scope—driveways, culverts, ponds,
+            basements, trench work, and septic systems.
+          </p>
 
-      {/* Section 2: Call-to-Action */}
-      <section className="mt-20 text-center">
-        <h2 className="text-3xl font-bold mb-6 text-gray-100">Ready to Start?</h2>
-        <p className="text-xl mb-8 text-gray-300">
-          Save time and money with SiteBid AI’s accurate and instant estimates.
-          Get started with your project today!
-        </p>
-        <div className="space-x-6">
-          <a
-            href="/estimate/new"
-            className="px-8 py-4 bg-orange-600 text-lg font-semibold rounded-lg shadow-lg hover:scale-105 transform transition duration-300"
-          >
-            Get Your Estimate
-          </a>
-        </div>
-      </section>
+          {/* Quick contact strip */}
+          <div className="flex flex-col sm:flex-row gap-3 justify-center items-center mb-8">
+            {COMPANY.phone && (
+              <a
+                href={`tel:${COMPANY.phone.replace(/\s+/g, "")}`}
+                className="px-4 py-2 rounded-md border border-white/10 bg-white/5 hover:bg-white/10 transition text-gray-200"
+              >
+                📞 {COMPANY.phone}
+              </a>
+            )}
+            {COMPANY.email && (
+              <a
+                href={`mailto:${COMPANY.email}`}
+                className="px-4 py-2 rounded-md border border-white/10 bg-white/5 hover:bg-white/10 transition text-gray-200"
+              >
+                ✉️ {COMPANY.email}
+              </a>
+            )}
+          </div>
 
-      {/* Section 3: Footer */}
-      <footer className="mt-16 text-center">
-        <p className="text-lg text-gray-400">© 2025 SiteBid AI - All Rights Reserved</p>
+          <div className="flex flex-wrap justify-center gap-4">
+            <Link
+              href="/estimate/new/driveway"
+              className="px-6 py-3 bg-indigo-600 text-lg font-semibold rounded-lg shadow-lg hover:scale-105 transform transition"
+            >
+              Start Driveway Estimate
+            </Link>
+            <Link
+              href="/estimate/new/culvert"
+              className="px-6 py-3 bg-green-600 text-lg font-semibold rounded-lg shadow-lg hover:scale-105 transform transition"
+            >
+              Start Culvert Estimate
+            </Link>
+          </div>
+        </section>
+
+        {/* Specializations */}
+        <section className="mt-16 space-y-12">
+          <div className="text-center">
+            <h2 className="text-4xl font-bold mb-4 text-gray-100">
+              Our Specializations
+            </h2>
+            <p className="text-lg mb-8 text-gray-300">
+              Select a project type to generate an instant, detailed estimate.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            <ProjectCard
+              title="Driveways"
+              description="Strip, grade, base/top lifts, trucking, compaction & markup—dialed."
+              link="/estimate/new/driveway"
+              accent="indigo"
+            />
+            <ProjectCard
+              title="Culverts"
+              description="Trench, bedding, pipe, restoration (asphalt/riprap), end sections."
+              link="/estimate/new/culvert"
+              accent="emerald"
+            />
+            <ProjectCard
+              title="Ponds"
+              description="Bowl cuts, slopes, beach/stone ring, overflow pipe, clay import."
+              link="/estimate/new/pond"
+              accent="cyan"
+            />
+            <ProjectCard
+              title="Basements"
+              description="Overdig box + ramp, under-slab stone, perimeter drain, trucking."
+              link="/estimate/new/basement"
+              accent="amber"
+            />
+            <ProjectCard
+              title="Trench-Work"
+              description="Linear trench with pipe, bedding, warning tape/tracer & restoration."
+              link="/estimate/new/trench"
+              accent="rose"
+            />
+            <ProjectCard
+              title="Septic Systems"
+              description="Gravel or chamber systems, tank & d-box, fabric, hauling & fees."
+              link="/estimate/new/septic"
+              accent="violet"
+            />
+          </div>
+        </section>
+
+        {/* CTA */}
+        <section className="mt-20 text-center">
+          <h2 className="text-3xl font-bold mb-6 text-gray-100">
+            Ready to Start?
+          </h2>
+          <p className="text-xl mb-8 text-gray-300">
+            Save time and money with fast, consistent, professional bids.
+          </p>
+          <div className="flex flex-wrap gap-4 justify-center">
+            <Link
+              href="/estimate/new"
+              className="px-8 py-4 bg-orange-600 text-lg font-semibold rounded-lg shadow-lg hover:scale-105 transform transition"
+            >
+              Get Your Estimate
+            </Link>
+            <Link
+              href="/company"
+              className="px-8 py-4 bg-white/10 border border-white/10 text-lg font-semibold rounded-lg shadow-lg hover:bg-white/15 transition"
+            >
+              Learn About Our Company
+            </Link>
+          </div>
+        </section>
+      </main>
+
+      {/* Footer */}
+      <footer className="mt-16 border-t border-gray-800">
+        <div className="mx-auto max-w-7xl p-8 text-center sm:text-left grid gap-6 sm:grid-cols-3">
+          <div>
+            <div className="text-2xl font-bold">{COMPANY.name}</div>
+            <div className="text-gray-400 text-sm mt-2">
+              AI estimating built for dirt-moving pros.
+            </div>
+          </div>
+          <div>
+            <div className="font-semibold mb-2">Contact</div>
+            <ul className="text-gray-300 text-sm space-y-1">
+              {COMPANY.phone && (
+                <li>
+                  <a className="hover:text-white" href={`tel:${COMPANY.phone}`}>
+                    {COMPANY.phone}
+                  </a>
+                </li>
+              )}
+              {COMPANY.email && (
+                <li>
+                  <a className="hover:text-white" href={`mailto:${COMPANY.email}`}>
+                    {COMPANY.email}
+                  </a>
+                </li>
+              )}
+              {Array.isArray(COMPANY.addressLines) &&
+                COMPANY.addressLines.length > 0 && (
+                  <li className="text-gray-400">
+                    {COMPANY.addressLines.map((l, i) => (
+                      <div key={i}>{l}</div>
+                    ))}
+                  </li>
+                )}
+            </ul>
+          </div>
+          <div>
+            <div className="font-semibold mb-2">Links</div>
+            <ul className="text-gray-300 text-sm space-y-1">
+              <li>
+                <Link className="hover:text-white" href="/company">
+                  Company
+                </Link>
+              </li>
+              <li>
+                <Link className="hover:text-white" href="/company#contact">
+                  Contact
+                </Link>
+              </li>
+              <li>
+                <Link className="hover:text-white" href="/estimate/new">
+                  All Estimators
+                </Link>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div className="text-center text-gray-500 text-sm pb-8">
+          © {new Date().getFullYear()} {COMPANY.name || "SiteBid AI"} — All Rights Reserved
+        </div>
       </footer>
-    </main>
+    </div>
   );
 }
 
-function ProjectCard({ title, description, link }: { title: string; description: string; link: string }) {
+function ProjectCard({
+  title,
+  description,
+  link,
+  accent = "indigo",
+}: {
+  title: string;
+  description: string;
+  link: string;
+  accent?: "indigo" | "emerald" | "cyan" | "amber" | "rose" | "violet";
+}) {
+  const ring =
+    accent === "indigo"
+      ? "ring-indigo-600"
+      : accent === "emerald"
+      ? "ring-emerald-600"
+      : accent === "cyan"
+      ? "ring-cyan-600"
+      : accent === "amber"
+      ? "ring-amber-600"
+      : accent === "rose"
+      ? "ring-rose-600"
+      : "ring-violet-600";
+
+  const badgeBg =
+    accent === "indigo"
+      ? "bg-indigo-600/20"
+      : accent === "emerald"
+      ? "bg-emerald-600/20"
+      : accent === "cyan"
+      ? "bg-cyan-600/20"
+      : accent === "amber"
+      ? "bg-amber-600/20"
+      : accent === "rose"
+      ? "bg-rose-600/20"
+      : "bg-violet-600/20";
+
+  const badgeDot =
+    accent === "indigo"
+      ? "bg-indigo-400"
+      : accent === "emerald"
+      ? "bg-emerald-400"
+      : accent === "cyan"
+      ? "bg-cyan-400"
+      : accent === "amber"
+      ? "bg-amber-400"
+      : accent === "rose"
+      ? "bg-rose-400"
+      : "bg-violet-400";
+
   return (
-    <div className="bg-gray-800 text-gray-200 p-6 rounded-xl shadow-xl hover:shadow-2xl hover:scale-105 transform transition duration-300">
-      <h3 className="text-2xl font-semibold mb-4 text-indigo-300">{title}</h3>
-      <p className="text-lg mb-4 text-gray-400">{description}</p>
-      <a
+    <div className="bg-gray-800/70 text-gray-200 p-6 rounded-xl shadow-xl hover:shadow-2xl hover:scale-[1.02] transform transition ring-1 ring-white/5">
+      <div className={`inline-flex items-center gap-2 px-2 py-1 rounded-full text-xs ${badgeBg}`}>
+        <span className={`h-2 w-2 rounded-full ${badgeDot}`} />
+        Estimator
+      </div>
+      <h3 className="text-2xl font-semibold mt-3 mb-3">{title}</h3>
+      <p className="text-gray-400 mb-5">{description}</p>
+      <Link
         href={link}
-        className="inline-block px-6 py-2 bg-blue-500 text-white rounded-full shadow-md hover:bg-blue-600 transition duration-300"
+        className={`inline-block px-5 py-2 rounded-full bg-white/10 hover:bg-white/15 transition border ${ring}`}
       >
         Get Estimate
-      </a>
+      </Link>
     </div>
   );
 }
