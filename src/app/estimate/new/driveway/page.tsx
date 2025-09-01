@@ -1,7 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { drivewayEstimate, DrivewayVars, DrivewayRates } from "@/lib/calculators/driveway";
+import BidPreview from "@/components/BidPreview";
+import { COMPANY } from "@/lib/company";
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
 
 function currency(n: number) {
   if (Number.isNaN(n) || !Number.isFinite(n)) return "$0";
@@ -42,7 +46,16 @@ export default function NewEstimate() {
   });
 
   const [extrasUSD, setExtrasUSD] = useState(0);
-  const [permitFees, setPermitFees] = useState(0); // Permit Fees state
+  const [permitFees, setPermitFees] = useState(0); // pass-through
+
+  // Client info for proposal
+  const [client, setClient] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    addressLines: [] as string[],
+    projectAddressLines: [] as string[],
+  });
 
   // Markups (fractions)
   const [overheadPct, setOverheadPct] = useState(0.10);
@@ -74,9 +87,10 @@ export default function NewEstimate() {
     return w;
   }, [v.base_lift_ft, v.top_lift_ft, v.compaction_passes, calc.trips]);
 
-  // Totals
+  // Totals — permits treated as pass-through AFTER profit
   const base = calc.subtotal * (1 + overheadPct + contingencyPct);
-  const total = base / (1 - profitMargin) + permitFees; // Adding permit fees to the total calculation
+  const total = base / (1 - profitMargin);
+  const grandTotal = total + (permitFees || 0);
 
   // Sensitivity (share of subtotal)
   const stoneCost = calc.cost_base_stone + calc.cost_top_stone;
@@ -87,6 +101,33 @@ export default function NewEstimate() {
   const sEquip = equipCost / Math.max(calc.subtotal, 1);
 
   const num = (e: React.ChangeEvent<HTMLInputElement>) => Number(e.target.value);
+
+  // ----- PDF Export of the proposal -----
+  const bidRef = useRef<HTMLDivElement>(null);
+  const downloadPDF = async () => {
+    const el = bidRef.current;
+    if (!el) return;
+    document.body.classList.add("exporting"); // hide .no-print while capturing
+    await new Promise((r) => setTimeout(r, 0));
+
+    const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
+    document.body.classList.remove("exporting");
+
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    const mmFullWidth = (canvas.width * 25.4) / 96;
+    const mmFullHeight = (canvas.height * 25.4) / 96;
+
+    const ratio = Math.min(pageWidth / mmFullWidth, pageHeight / mmFullHeight);
+    const imgW = mmFullWidth * ratio;
+    const imgH = mmFullHeight * ratio;
+
+    pdf.addImage(imgData, "PNG", (pageWidth - imgW) / 2, 10, imgW, imgH);
+    pdf.save(`Driveway_Bid_${new Date().toISOString().slice(0,10)}.pdf`);
+  };
 
   return (
     <main className="mx-auto max-w-6xl p-6">
@@ -121,7 +162,7 @@ export default function NewEstimate() {
             </div>
           </Card>
 
-          <Card title="Permit Fees">
+          <Card title="Permit Fees (pass-through)">
             <Row label="Permit Fees ($)">
               <input type="number" className="input" value={permitFees} onChange={e=>setPermitFees(num(e))}/>
             </Row>
@@ -150,7 +191,55 @@ export default function NewEstimate() {
             </Row>
           </Card>
 
-          {/* Other sections go here */}
+          <Card title="Haul & Compaction">
+            <Row label="Round-trip haul (min)"><input type="number" className="input" value={v.haul_round_trip_min} onChange={e=>setV({...v,haul_round_trip_min:num(e)})}/></Row>
+            <Row label="Truck cap (tons)"><input type="number" className="input" value={v.truck_capacity_tons} onChange={e=>setV({...v,truck_capacity_tons:num(e)})}/></Row>
+            <Row label="Load factor (0–1)"><input type="number" step="0.01" className="input" value={v.truck_load_factor} onChange={e=>setV({...v,truck_load_factor:num(e)})}/></Row>
+            <Row label="Roller passes (0 = none)"><input type="number" className="input" value={v.compaction_passes} onChange={e=>setV({...v,compaction_passes:num(e)})}/></Row>
+            <Row label="Roller coverage (ft²/hr)"><input type="number" className="input" value={v.roller_coverage_ft2_per_hr} onChange={e=>setV({...v,roller_coverage_ft2_per_hr:num(e)})}/></Row>
+          </Card>
+
+          <Card title="Rates & Extras">
+            <Row label="Dozer ($/hr)"><input type="number" className="input" value={r.dozer_hr} onChange={e=>setR({...r,dozer_hr:num(e)})}/></Row>
+            <Row label="Excavator ($/hr)"><input type="number" className="input" value={r.excavator_hr} onChange={e=>setR({...r,excavator_hr:num(e)})}/></Row>
+            <Row label="Loader ($/hr)"><input type="number" className="input" value={r.loader_hr} onChange={e=>setR({...r,loader_hr:num(e)})}/></Row>
+            <Row label="Roller ($/hr)"><input type="number" className="input" value={r.roller_hr} onChange={e=>setR({...r,roller_hr:num(e)})}/></Row>
+            <Row label="Trucking ($/hr)"><input type="number" className="input" value={r.trucking_hr} onChange={e=>setR({...r,trucking_hr:num(e)})}/></Row>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="text-sm">Base stone ($/ton)</div>
+                <input type="number" className="input mt-1 w-full" value={r.base_stone_ton} onChange={e=>setR({...r,base_stone_ton:num(e)})}/>
+              </div>
+              <div>
+                <div className="text-sm">Top stone ($/ton)</div>
+                <input type="number" className="input mt-1 w-full" value={r.top_stone_ton} onChange={e=>setR({...r,top_stone_ton:num(e)})}/>
+              </div>
+            </div>
+
+            <Row label="Extras ($)">
+              <input type="number" className="input" value={extrasUSD} onChange={e=>setExtrasUSD(num(e))}/>
+            </Row>
+          </Card>
+
+          {/* Client info for proposal */}
+          <Card title="Client Info">
+            <Row label="Name">
+              <input className="input" value={client.name} onChange={(e)=>setClient({...client, name: e.target.value})}/>
+            </Row>
+            <Row label="Phone">
+              <input className="input" value={client.phone} onChange={(e)=>setClient({...client, phone: e.target.value})}/>
+            </Row>
+            <Row label="Email">
+              <input className="input" value={client.email} onChange={(e)=>setClient({...client, email: e.target.value})}/>
+            </Row>
+            <Row label="Address (line)">
+              <input className="input" placeholder="123 Main St" onBlur={(e)=>setClient({...client, addressLines:[e.target.value]})}/>
+            </Row>
+            <Row label="Project Addr (line)">
+              <input className="input" placeholder="Project site address" onBlur={(e)=>setClient({...client, projectAddressLines:[e.target.value]})}/>
+            </Row>
+          </Card>
         </section>
 
         {/* Outputs */}
@@ -170,17 +259,21 @@ export default function NewEstimate() {
             <div className="grid grid-cols-2 gap-3">
               <KV k="Area" v={`${(v.L_ft*v.W_ft).toLocaleString()} ft²`} />
               <KV k="Strip volume" v={`${calc.V_strip_yd3.toFixed(2)} yd³`} />
+
               <KV k="Base vol" v={`${calc.V_base_yd3.toFixed(2)} yd³`} />
               <KV k="Top vol" v={`${calc.V_top_yd3.toFixed(2)} yd³`} />
               <KV k="Stone total" v={`${calc.V_stone_yd3.toFixed(2)} yd³`} />
+
               <KV k="Base tons" v={`${calc.tons_base.toFixed(2)} t`} />
               <KV k="Top tons" v={`${calc.tons_top.toFixed(2)} t`} />
               <KV k="Trips" v={`${calc.trips}`} />
+
               <KV k="Dozer hours" v={`${calc.hrs_dozer.toFixed(2)} h`} />
               <KV k="Excavator hours" v={`${calc.hrs_exc.toFixed(2)} h`} />
               <KV k="Loader hours" v={`${calc.hrs_load.toFixed(2)} h`} />
               <KV k="Trucking hours" v={`${calc.hrs_truck.toFixed(2)} h`} />
               <KV k="Roller hours" v={`${calc.hrs_compact.toFixed(2)} h`} />
+
               <KV k="Stone cost" v={currency(calc.cost_base_stone + calc.cost_top_stone)} />
               <KV k="Trucking cost" v={currency(calc.cost_truck)} />
               <KV k="Equipment cost" v={currency(calc.cost_dozer + calc.cost_exc + calc.cost_loader + calc.cost_roller)} />
@@ -191,6 +284,8 @@ export default function NewEstimate() {
             <div className="grid grid-cols-2 gap-3 mt-3">
               <KV k="Base (OH+Cont)" v={currency(base)} />
               <KV k="Total (with profit)" v={currency(total)} />
+              <KV k="Permit fees (pass-through)" v={currency(permitFees || 0)} />
+              <KV k="Grand Total" v={currency(grandTotal)} />
             </div>
 
             <div className="mt-4">
@@ -202,8 +297,64 @@ export default function NewEstimate() {
               </ul>
             </div>
           </Card>
+
+          {/* Proposal Preview + actions */}
+          <Card title="Proposal Preview">
+            <div ref={bidRef}>
+              <BidPreview
+                company={COMPANY}
+                client={client}
+                meta={{
+                  projectName: "Driveway Construction",
+                  dateISO: new Date().toISOString(),
+                  validDays: 14,
+                  notes: "Topsoil strip, stone base/top, haul and shaping as calculated.",
+                }}
+                pricing={{
+                  materials: stoneCost,
+                  equipment: calc.cost_dozer + calc.cost_exc + calc.cost_loader + calc.cost_roller,
+                  trucking: calc.cost_truck,
+                  extras: extrasUSD || 0,
+                  permitFees: permitFees || 0,
+                  subtotal: calc.subtotal, // core subtotal (before extras)
+                  overheadPct,
+                  contingencyPct,
+                  profitMargin,
+                  permitPassThrough: true,
+                }}
+                scopeBullets={[
+                  `Strip topsoil ~${Math.round(v.strip_T_ft*12)}" using ${v.strip_method}.`,
+                  `Place ${Math.round(v.base_lift_ft*12)}" base stone and ${Math.round(v.top_lift_ft*12)}" top stone.`,
+                  `Shape/grade, haul/dispose spoils${v.compaction_passes>0 ? `, compact (${v.compaction_passes} passes)` : ""}.`,
+                ]}
+                inclusions={[
+                  "Strip & grade, aggregate supply/placement",
+                  "Trucking & disposal",
+                  "Mobilization",
+                ]}
+                exclusions={[
+                  "Rock excavation or dewatering",
+                  "Unsuitable subgrade remediation",
+                  "Permits/fees unless listed",
+                  "Geotextile fabric unless listed",
+                ]}
+                printId="driveway-bid"
+              />
+            </div>
+
+            <div className="mt-3 no-print">
+              <button onClick={downloadPDF} className="rounded-lg border px-3 py-2">
+                Download PDF
+              </button>
+            </div>
+          </Card>
         </section>
       </div>
+
+      {/* Print/export CSS */}
+      <style jsx global>{`
+        .exporting .no-print { display: none !important; }
+      `}</style>
     </main>
   );
 }

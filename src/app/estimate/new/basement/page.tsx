@@ -1,14 +1,20 @@
 /* eslint react/no-unescaped-entities: 0 */
-
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   basementEstimate,
   BasementVars,
   BasementRates,
   BasementExtras,
 } from "@/lib/calculators/basement";
+
+import BidPreview from "@/components/BidPreview";
+import { COMPANY } from "@/lib/company";
+
+// PDF export libs (install first: npm i jspdf html2canvas)
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
 
 function currency(n: number) {
   if (Number.isNaN(n) || !Number.isFinite(n)) return "$0";
@@ -66,6 +72,15 @@ export default function NewBasementEstimate() {
   const [contingencyPct, setContingencyPct] = useState(0.10);
   const [profitMargin, setProfitMargin] = useState(0.15);
 
+  // Client info (for proposal)
+  const [client, setClient] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    addressLines: [] as string[],
+    projectAddressLines: [] as string[],
+  });
+
   // Validation
   const errors = useMemo(() => {
     const e: string[] = [];
@@ -103,11 +118,41 @@ export default function NewBasementEstimate() {
   // Warnings
   const warnings = useMemo(() => {
     const w: string[] = [];
-    if ((x.base_stone_thk_ft ?? 0) > 1) w.push("Under-slab stone > 12\" — check spec.");
+    if ((x.base_stone_thk_ft ?? 0) > 1) w.push('Under-slab stone > 12" — check spec.');
     if ((x.drain_trench_depth_ft ?? 0) > 1.5) w.push("Drain trench depth unusually large — check detail.");
     if (v.haul_off_fraction > 0.8) w.push("High haul-off fraction — confirm fill/backfill availability on site.");
     return w;
   }, [x, v.haul_off_fraction]);
+
+  // ----- PDF Export (capture only the proposal) -----
+  const bidRef = useRef<HTMLDivElement>(null);
+  const downloadPDF = async () => {
+    const el = bidRef.current;
+    if (!el) return;
+    // Hide 'no-print' UI during capture
+    document.body.classList.add("exporting");
+    await new Promise((r) => setTimeout(r, 0));
+
+    const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
+    document.body.classList.remove("exporting");
+
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF("p", "mm", "a4");
+
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    // Convert canvas px to mm (assuming 96 DPI)
+    const mmFullWidth = (canvas.width * 25.4) / 96;
+    const mmFullHeight = (canvas.height * 25.4) / 96;
+
+    const ratio = Math.min(pageWidth / mmFullWidth, pageHeight / mmFullHeight);
+    const imgW = mmFullWidth * ratio;
+    const imgH = mmFullHeight * ratio;
+
+    pdf.addImage(imgData, "PNG", (pageWidth - imgW) / 2, 10, imgW, imgH);
+    pdf.save(`Basement_Bid_${new Date().toISOString().slice(0,10)}.pdf`);
+  };
 
   return (
     <main className="mx-auto max-w-6xl p-6">
@@ -227,6 +272,25 @@ export default function NewBasementEstimate() {
               <input type="number" step={1} className="input" value={profitMargin*100} onChange={e=>setProfitMargin(Number(e.target.value)/100)}/>
             </Row>
           </Card>
+
+          {/* Client info (for proposal) */}
+          <Card title="Client Info">
+            <Row label="Name">
+              <input className="input" value={client.name} onChange={(e)=>setClient({...client, name: e.target.value})}/>
+            </Row>
+            <Row label="Phone">
+              <input className="input" value={client.phone} onChange={(e)=>setClient({...client, phone: e.target.value})}/>
+            </Row>
+            <Row label="Email">
+              <input className="input" value={client.email} onChange={(e)=>setClient({...client, email: e.target.value})}/>
+            </Row>
+            <Row label="Address (line)">
+              <input className="input" placeholder="123 Main St" onBlur={(e)=>setClient({...client, addressLines:[e.target.value]})}/>
+            </Row>
+            <Row label="Project Addr (line)">
+              <input className="input" placeholder="Project site address" onBlur={(e)=>setClient({...client, projectAddressLines:[e.target.value]})}/>
+            </Row>
+          </Card>
         </section>
 
         {/* Outputs */}
@@ -304,8 +368,69 @@ export default function NewBasementEstimate() {
               <b>Exclusions:</b> rock excavation, dewatering, shoring/bracing, utility relocations, concrete, waterproofing, sump systems, erosion control, permits/fees (listed separately).
             </p>
           </Card>
+
+          {/* Proposal Preview + actions */}
+          <Card title="Proposal Preview">
+            <div ref={bidRef}>
+              <BidPreview
+                company={COMPANY}
+                client={client}
+                meta={{
+                  projectName: "Basement Excavation",
+                  dateISO: new Date().toISOString(),
+                  validDays: 14,
+                  // bidNo: "BSM-2025-001",
+                  notes: "Quantities, haul, and productivities as calculated above.",
+                }}
+                pricing={{
+                  materials: calc.materials,
+                  equipment: calc.cost_excavator + calc.cost_dozer + calc.cost_loader,
+                  trucking: calc.cost_truck,
+                  extras: calc.extrasUSD || 0,
+                  permitFees: permitFees || 0,
+                  subtotal: calc.subtotal,
+                  overheadPct,
+                  contingencyPct,
+                  profitMargin,
+                  permitPassThrough: true,
+                }}
+                additionalItems={[
+                  { label: "Dump Fees", amount: calc.cost_dump_fees },
+                ]}
+                scopeBullets={[
+                  `Excavate to footing depth ${v.depth_ft} ft with ${v.overdig_ft} ft overdig each side.`,
+                  `Ramp ${v.ramp_len_ft}×${v.ramp_width_ft} ft for access; haul-off ≈ ${Math.round(v.haul_off_fraction*100)}% of spoils.`,
+                  `Under-slab stone ${(x.base_stone_thk_ft ?? 0)} ft; perimeter drain ${(x.perimeter_drain_len_ft ?? 2*(v.L_in_ft+v.W_in_ft)).toFixed(0)} ft (if listed).`,
+                ]}
+                inclusions={[
+                  "Mobilization and access ramp",
+                  "Excavation, shaping, and export per plan",
+                  "Trucking & disposal as noted",
+                ]}
+                exclusions={[
+                  "Rock excavation or dewatering",
+                  "Shoring/bracing or utility relocations",
+                  "Concrete, waterproofing, sump systems",
+                  "Permits/fees unless listed",
+                ]}
+                printId="basement-bid"
+              />
+            </div>
+
+            <div className="mt-3 no-print">
+              <button onClick={downloadPDF} className="rounded-lg border px-3 py-2">
+                Download PDF
+              </button>
+            </div>
+          </Card>
         </section>
       </div>
+
+      {/* Print & export CSS */}
+      <style jsx global>{`
+        /* Hide .no-print elements when exporting to PDF via html2canvas */
+        .exporting .no-print { display: none !important; }
+      `}</style>
     </main>
   );
 }
@@ -348,6 +473,3 @@ function Banner({ tone, title, children }: { tone: "red" | "amber"; title: strin
     </div>
   );
 }
-// ------------------------------------------------------------------------------
-// src/lib/calculators/basement.ts
-// ---------------------------------------------------------------------------

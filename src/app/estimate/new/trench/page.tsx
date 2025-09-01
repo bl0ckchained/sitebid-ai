@@ -2,13 +2,18 @@
 
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   trenchEstimate,
   TrenchVars,
   TrenchRates,
   TrenchExtras,
 } from "@/lib/calculators/trench";
+
+import BidPreview from "@/components/BidPreview";
+import { COMPANY } from "@/lib/company";
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
 
 function currency(n: number) {
   if (Number.isNaN(n) || !Number.isFinite(n)) return "$0";
@@ -61,6 +66,15 @@ export default function NewTrenchEstimate() {
   // Permit fees (pass-through)
   const [permitFees, setPermitFees] = useState(0);
 
+  // Client info for proposal
+  const [client, setClient] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    addressLines: [] as string[],
+    projectAddressLines: [] as string[],
+  });
+
   // Markups
   const [overheadPct, setOverheadPct] = useState(0.10);
   const [contingencyPct, setContingencyPct] = useState(0.10);
@@ -94,10 +108,20 @@ export default function NewTrenchEstimate() {
   const grandTotal = total + (permitFees || 0);
 
   // Sensitivity
-  const materialsCost = calc.materials;
-  const truckingCost = calc.cost_truck;
-  const equipCost = calc.cost_excavator + calc.cost_loader;
-  const sMat = materialsCost / Math.max(calc.subtotal, 1);
+  const materialsAndDisposal =
+    (calc.cost_pipe || 0) +
+    (calc.cost_tracer || 0) +
+    (calc.cost_tape || 0) +
+    (calc.cost_bedding || 0) +
+    (calc.cost_asphalt || 0) +
+    (calc.cost_concrete || 0) +
+    (calc.cost_lawn || 0) +
+    (calc.cost_dump_fees || 0);
+
+  const truckingCost = calc.cost_truck || 0;
+  const equipCost = (calc.cost_excavator || 0) + (calc.cost_loader || 0);
+
+  const sMat = materialsAndDisposal / Math.max(calc.subtotal, 1);
   const sTrk = truckingCost / Math.max(calc.subtotal, 1);
   const sEqp = equipCost / Math.max(calc.subtotal, 1);
 
@@ -113,6 +137,33 @@ export default function NewTrenchEstimate() {
   }, [v.trench_width_override_ft, v.pipe_d_in, v.side_clearance_ft, v.bedding_t_ft, r.tracer_per_ft, v.depth_ft]);
 
   const num = (e: React.ChangeEvent<HTMLInputElement>) => Number(e.target.value);
+
+  // ----- PDF Export (proposal only) -----
+  const bidRef = useRef<HTMLDivElement>(null);
+  const downloadPDF = async () => {
+    const el = bidRef.current;
+    if (!el) return;
+    document.body.classList.add("exporting");
+    await new Promise((r) => setTimeout(r, 0));
+
+    const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
+    document.body.classList.remove("exporting");
+
+    const img = canvas.toDataURL("image/png");
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pw = pdf.internal.pageSize.getWidth();
+    const ph = pdf.internal.pageSize.getHeight();
+
+    // px (96dpi) -> mm
+    const mmW = (canvas.width * 25.4) / 96;
+    const mmH = (canvas.height * 25.4) / 96;
+    const ratio = Math.min(pw / mmW, ph / mmH);
+    const imgW = mmW * ratio;
+    const imgH = mmH * ratio;
+
+    pdf.addImage(img, "PNG", (pw - imgW) / 2, 10, imgW, imgH);
+    pdf.save(`Trench_Bid_${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
 
   return (
     <main className="mx-auto max-w-6xl p-6">
@@ -223,6 +274,33 @@ export default function NewTrenchEstimate() {
               <input type="number" step={1} className="input" value={profitMargin*100} onChange={e=>setProfitMargin(Number(e.target.value)/100)}/>
             </Row>
           </Card>
+
+          {/* Client info for proposal */}
+          <Card title="Client Info">
+            <Row label="Name">
+              <input className="input" value={client.name} onChange={(e) => setClient({ ...client, name: e.target.value })} />
+            </Row>
+            <Row label="Phone">
+              <input className="input" value={client.phone} onChange={(e) => setClient({ ...client, phone: e.target.value })} />
+            </Row>
+            <Row label="Email">
+              <input className="input" value={client.email} onChange={(e) => setClient({ ...client, email: e.target.value })} />
+            </Row>
+            <Row label="Address (line)">
+              <input
+                className="input"
+                placeholder="123 Main St"
+                onBlur={(e) => setClient({ ...client, addressLines: [e.target.value] })}
+              />
+            </Row>
+            <Row label="Project Addr (line)">
+              <input
+                className="input"
+                placeholder="Project site address"
+                onBlur={(e) => setClient({ ...client, projectAddressLines: [e.target.value] })}
+              />
+            </Row>
+          </Card>
         </section>
 
         {/* Outputs */}
@@ -263,7 +341,7 @@ export default function NewTrenchEstimate() {
               <KV k="Concrete restore" v={currency(calc.cost_concrete)} />
               <KV k="Lawn restore" v={currency(calc.cost_lawn)} />
               <KV k="Dump fees" v={currency(calc.cost_dump_fees)} />
-              <KV k="Equipment" v={currency(calc.cost_excavator + calc.cost_loader)} />
+              <KV k="Equipment" v={currency((calc.cost_excavator || 0) + (calc.cost_loader || 0))} />
               <KV k="Trucking" v={currency(calc.cost_truck)} />
               <KV k="Extras" v={currency(calc.extrasUSD || 0)} />
               <KV k="Subtotal" v={currency(calc.subtotal)} />
@@ -276,10 +354,68 @@ export default function NewTrenchEstimate() {
             <div className="mt-4">
               <h3 className="font-semibold">Sensitivity (share of subtotal)</h3>
               <ul className="list-disc ml-5 text-sm mt-1">
-                <li>Materials: {(sMat*100).toFixed(0)}%</li>
+                <li>Materials + disposal: {(sMat*100).toFixed(0)}%</li>
                 <li>Trucking: {(sTrk*100).toFixed(0)}%</li>
                 <li>Equipment: {(sEqp*100).toFixed(0)}%</li>
               </ul>
+            </div>
+          </Card>
+
+          {/* Proposal Preview + actions */}
+          <Card title="Proposal Preview">
+            <div ref={bidRef}>
+              <BidPreview
+                company={COMPANY}
+                client={client}
+                meta={{
+                  projectName: "Utility Trench Install",
+                  dateISO: new Date().toISOString(),
+                  validDays: 14,
+                  notes:
+                    "Excavate, bed, install pipe with tracer & warning tape, backfill/shape, restore surfaces as noted; haul/dispose spoils per calculation.",
+                }}
+                pricing={{
+                  materials: materialsAndDisposal,    // includes disposal to keep pricing simple
+                  equipment: equipCost,
+                  trucking: truckingCost,
+                  extras: x.extrasUSD || 0,
+                  permitFees: permitFees || 0,
+                  subtotal: calc.subtotal,
+                  overheadPct,
+                  contingencyPct,
+                  profitMargin,
+                  permitPassThrough: true,
+                }}
+                scopeBullets={[
+                  `Trench ~${v.L_ft} ft long @ ~${v.depth_ft} ft depth (OD ${v.pipe_d_in}" pipe).`,
+                  `Bedding ${v.bedding_t_ft} ft; side clearance ${v.side_clearance_ft} ft each side; width ${calc.trench_w_ft.toFixed(2)} ft ${v.trench_width_override_ft > 0 ? "(override applied)" : "(auto)"}.`,
+                  `Install pipe + tracer wire + warning tape; backfill and shape.`,
+                  `Surface restoration: asphalt ${x.asphalt_restore_sf ?? 0} sf, concrete ${x.concrete_restore_sf ?? 0} sf, lawn ${x.lawn_restore_sf ?? 0} sf.`,
+                  `Haul-off ~${Math.round(v.haul_off_fraction*100)}% of spoils; truck ${v.truck_capacity_yd3} yd³; RT haul ${v.haul_round_trip_min} min.`,
+                ]}
+                inclusions={[
+                  "Excavation, bedding, pipe installation",
+                  "Tracer wire and warning tape (if specified)",
+                  "Backfill and shaping",
+                  "Surface restoration as listed",
+                  "Trucking/disposal as calculated",
+                  "Mobilization",
+                ]}
+                exclusions={[
+                  "Rock excavation, dewatering, shoring/boxes",
+                  "Service reconnections, pressure testing",
+                  "Traffic control beyond noted",
+                  "Permits/fees (listed separately)",
+                  "Items not specifically described",
+                ]}
+                printId="trench-bid"
+              />
+            </div>
+
+            <div className="mt-3 no-print">
+              <button onClick={downloadPDF} className="rounded-lg border px-3 py-2">
+                Download PDF
+              </button>
             </div>
           </Card>
 
@@ -288,7 +424,7 @@ export default function NewTrenchEstimate() {
               <li>Trench for {v.L_ft} ft; depth {v.depth_ft} ft; pipe {v.pipe_d_in}" OD; bedding {v.bedding_t_ft} ft; side clearance {v.side_clearance_ft} ft each side.</li>
               <li>Width {calc.trench_w_ft.toFixed(2)} ft (override {v.trench_width_override_ft > 0 ? "yes" : "no"}).</li>
               <li>Haul-off {Math.round(v.haul_off_fraction*100)}% of spoils; truck {v.truck_capacity_yd3} yd³; RT haul {v.haul_round_trip_min} min.</li>
-              <li>Overhead {(overheadPct*100).toFixed(0)}%, Contingency {(contingencyPct*100).toFixed(0)}%, Profit {(profitMargin*100).toFixed(0)}%. Permits listed separately.</li>
+              <li>Overhead {(overheadPct*100).toFixed(0)}%, Contingency {(contingencyPct*100).toFixed(0)}%, Profit {(profitMargin*100).toFixed(0)}%. Permits listed separately (no markup).</li>
             </ul>
           </Card>
 
@@ -302,6 +438,11 @@ export default function NewTrenchEstimate() {
           </Card>
         </section>
       </div>
+
+      {/* Print/export CSS so we can hide buttons during capture */}
+      <style jsx global>{`
+        .exporting .no-print { display: none !important; }
+      `}</style>
     </main>
   );
 }
@@ -344,6 +485,3 @@ function Banner({ tone, title, children }: { tone: "red" | "amber"; title: strin
     </div>
   );
 }
-// ------------------------------------------------------------------------------
-// src/lib/calculators/basement.ts
-// ------------------------------------------------------------------------------

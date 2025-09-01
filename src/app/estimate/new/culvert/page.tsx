@@ -2,8 +2,12 @@
 
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { culvertEstimate } from "@/lib/calculators/culvert";
+import BidPreview from "@/components/BidPreview";
+import { COMPANY } from "@/lib/company";
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
 
 function currency(n: number) {
   if (Number.isNaN(n) || !Number.isFinite(n)) return "$0";
@@ -54,6 +58,15 @@ export default function NewCulvertEstimate() {
   const [overheadPct, setOverheadPct] = useState(0.1);
   const [contingencyPct, setContingencyPct] = useState(0.1);
   const [profitMargin, setProfitMargin] = useState(0.15);
+
+  // Client info for proposal
+  const [client, setClient] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    addressLines: [] as string[],
+    projectAddressLines: [] as string[],
+  });
 
   // Validation
   const errors = useMemo(() => {
@@ -113,6 +126,33 @@ export default function NewCulvertEstimate() {
   const sEqp = equipCost / Math.max(calc.subtotal, 1);
 
   const num = (e: React.ChangeEvent<HTMLInputElement>) => Number(e.target.value);
+
+  // ----- PDF Export of the proposal -----
+  const bidRef = useRef<HTMLDivElement>(null);
+  const downloadPDF = async () => {
+    const el = bidRef.current;
+    if (!el) return;
+    document.body.classList.add("exporting"); // hide .no-print while capturing
+    await new Promise((r) => setTimeout(r, 0));
+
+    const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
+    document.body.classList.remove("exporting");
+
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    const mmFullWidth = (canvas.width * 25.4) / 96;
+    const mmFullHeight = (canvas.height * 25.4) / 96;
+
+    const ratio = Math.min(pageWidth / mmFullWidth, pageHeight / mmFullHeight);
+    const imgW = mmFullWidth * ratio;
+    const imgH = mmFullHeight * ratio;
+
+    pdf.addImage(imgData, "PNG", (pageWidth - imgW) / 2, 10, imgW, imgH);
+    pdf.save(`Culvert_Bid_${new Date().toISOString().slice(0,10)}.pdf`);
+  };
 
   return (
     <main className="mx-auto max-w-6xl p-6">
@@ -360,6 +400,25 @@ export default function NewCulvertEstimate() {
             </div>
           </Card>
 
+          {/* Client info for proposal */}
+          <Card title="Client Info">
+            <Row label="Name">
+              <input className="input" value={client.name} onChange={(e)=>setClient({...client, name: e.target.value})}/>
+            </Row>
+            <Row label="Phone">
+              <input className="input" value={client.phone} onChange={(e)=>setClient({...client, phone: e.target.value})}/>
+            </Row>
+            <Row label="Email">
+              <input className="input" value={client.email} onChange={(e)=>setClient({...client, email: e.target.value})}/>
+            </Row>
+            <Row label="Address (line)">
+              <input className="input" placeholder="123 Main St" onBlur={(e)=>setClient({...client, addressLines:[e.target.value]})}/>
+            </Row>
+            <Row label="Project Addr (line)">
+              <input className="input" placeholder="Project site address" onBlur={(e)=>setClient({...client, projectAddressLines:[e.target.value]})}/>
+            </Row>
+          </Card>
+
           <Card title="Markup">
             <Row label="Overhead (%)">
               <input
@@ -467,8 +526,63 @@ export default function NewCulvertEstimate() {
               permits/fees (listed separately), unsuitable subgrade remediation, paving beyond listed areas.
             </p>
           </Card>
+
+          {/* Proposal Preview + actions */}
+          <Card title="Proposal Preview">
+            <div ref={bidRef}>
+              <BidPreview
+                company={COMPANY}
+                client={client}
+                meta={{
+                  projectName: "Culvert Installation",
+                  dateISO: new Date().toISOString(),
+                  validDays: 14,
+                  notes: "Trench, bedding, pipe, restoration, and haul as calculated.",
+                }}
+                pricing={{
+                  materials: materialsCost,
+                  equipment: equipCost,
+                  trucking: truckingCost,
+                  extras: extrasUSD || 0,
+                  permitFees: permitFees || 0,
+                  subtotal: calc.subtotal, // core subtotal (before extras)
+                  overheadPct,
+                  contingencyPct,
+                  profitMargin,
+                  permitPassThrough: true,
+                }}
+                scopeBullets={[
+                  `Install ${v.L_pipe_ft} ft of ${v.D_in}" pipe; invert depth ${v.invert_depth_ft} ft; cover ${v.cover_ft} ft.`,
+                  `Bedding ${v.bedding_t_ft} ft with ${v.side_clearance_ft} ft side clearance each side.`,
+                  `End sections: ${endSections} ea; asphalt restore ${asphaltSF} sf; riprap ${riprapArea} ft² × ${riprapThkFt} ft.`,
+                ]}
+                inclusions={[
+                  "Excavation, bedding, pipe placement",
+                  "Backfill/compaction and trucking as noted",
+                  "Restoration items if listed",
+                ]}
+                exclusions={[
+                  "Rock excavation or dewatering",
+                  "Utility relocations or traffic control beyond noted",
+                  "Permits/fees unless listed",
+                ]}
+                printId="culvert-bid"
+              />
+            </div>
+
+            <div className="mt-3 no-print">
+              <button onClick={downloadPDF} className="rounded-lg border px-3 py-2">
+                Download PDF
+              </button>
+            </div>
+          </Card>
         </section>
       </div>
+
+      {/* Print/export CSS */}
+      <style jsx global>{`
+        .exporting .no-print { display: none !important; }
+      `}</style>
     </main>
   );
 }
@@ -532,3 +646,4 @@ function Banner({
     </div>
   );
 }
+// End of file

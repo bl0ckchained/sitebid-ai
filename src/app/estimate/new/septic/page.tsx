@@ -2,7 +2,7 @@
 
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   septicEstimate,
   SepticVars,
@@ -10,6 +10,11 @@ import {
   SepticExtras,
   SepticSystemType,
 } from "@/lib/calculators/septic";
+
+import BidPreview from "@/components/BidPreview";
+import { COMPANY } from "@/lib/company";
+import { jsPDF } from "jspdf";
+import html2canvas from "html2canvas";
 
 function currency(n: number) {
   if (Number.isNaN(n) || !Number.isFinite(n)) return "$0";
@@ -73,6 +78,15 @@ export default function NewSepticEstimate() {
   // Permit fees (pass-through, not marked up)
   const [permitFees, setPermitFees] = useState(0);
 
+  // Client info (for proposal)
+  const [client, setClient] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    addressLines: [] as string[],
+    projectAddressLines: [] as string[],
+  });
+
   // Markups
   const [overheadPct, setOverheadPct] = useState(0.10);
   const [contingencyPct, setContingencyPct] = useState(0.10);
@@ -128,6 +142,33 @@ export default function NewSepticEstimate() {
   }, [v.system_type, v.bedding_under_pipe_ft, v.cover_gravel_over_pipe_ft, v.use_fabric, r.chamber_each, v.chamber_unit_length_ft, v.pipe_d_in]);
 
   const num = (e: React.ChangeEvent<HTMLInputElement>) => Number(e.target.value);
+
+  // ----- PDF Export (proposal only) -----
+  const bidRef = useRef<HTMLDivElement>(null);
+  const downloadPDF = async () => {
+    const el = bidRef.current;
+    if (!el) return;
+    document.body.classList.add("exporting"); // hide .no-print while capturing
+    await new Promise((r) => setTimeout(r, 0));
+
+    const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
+    document.body.classList.remove("exporting");
+
+    const img = canvas.toDataURL("image/png");
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pw = pdf.internal.pageSize.getWidth();
+    const ph = pdf.internal.pageSize.getHeight();
+
+    // convert px (96dpi) to mm
+    const mmW = (canvas.width * 25.4) / 96;
+    const mmH = (canvas.height * 25.4) / 96;
+    const ratio = Math.min(pw / mmW, ph / mmH);
+    const imgW = mmW * ratio;
+    const imgH = mmH * ratio;
+
+    pdf.addImage(img, "PNG", (pw - imgW) / 2, 10, imgW, imgH);
+    pdf.save(`Septic_Bid_${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
 
   return (
     <main className="mx-auto max-w-6xl p-6">
@@ -258,6 +299,33 @@ export default function NewSepticEstimate() {
             <Row label="Contingency (%)"><input type="number" step={1} className="input" value={contingencyPct*100} onChange={e=>setContingencyPct(Number(e.target.value)/100)}/></Row>
             <Row label="Profit margin (%)"><input type="number" step={1} className="input" value={profitMargin*100} onChange={e=>setProfitMargin(Number(e.target.value)/100)}/></Row>
           </Card>
+
+          {/* Client info (for proposal) */}
+          <Card title="Client Info">
+            <Row label="Name">
+              <input className="input" value={client.name} onChange={(e) => setClient({ ...client, name: e.target.value })} />
+            </Row>
+            <Row label="Phone">
+              <input className="input" value={client.phone} onChange={(e) => setClient({ ...client, phone: e.target.value })} />
+            </Row>
+            <Row label="Email">
+              <input className="input" value={client.email} onChange={(e) => setClient({ ...client, email: e.target.value })} />
+            </Row>
+            <Row label="Address (line)">
+              <input
+                className="input"
+                placeholder="123 Main St"
+                onBlur={(e) => setClient({ ...client, addressLines: [e.target.value] })}
+              />
+            </Row>
+            <Row label="Project Addr (line)">
+              <input
+                className="input"
+                placeholder="Project site address"
+                onBlur={(e) => setClient({ ...client, projectAddressLines: [e.target.value] })}
+              />
+            </Row>
+          </Card>
         </section>
 
         {/* Outputs */}
@@ -325,6 +393,65 @@ export default function NewSepticEstimate() {
             </div>
           </Card>
 
+          {/* Proposal Preview + actions */}
+          <Card title="Proposal Preview">
+            <div ref={bidRef}>
+              <BidPreview
+                company={COMPANY}
+                client={client}
+                meta={{
+                  projectName: v.system_type === "gravel" ? "Septic System (Gravel Trench)" : "Septic System (Chamber)",
+                  dateISO: new Date().toISOString(),
+                  validDays: 14,
+                  notes:
+                    "Install complete septic system per plan/spec; excavation, bedding/chambers or gravel, tank & d-box set, piping, backfill, and restoration as noted.",
+                }}
+                pricing={{
+                  materials: calc.materials,
+                  equipment: calc.cost_excavator + calc.cost_loader,
+                  trucking: calc.cost_truck,
+                  extras: x.extrasUSD || 0,
+                  permitFees: permitFees || 0,
+                  subtotal: calc.subtotal,
+                  overheadPct,
+                  contingencyPct,
+                  profitMargin,
+                  permitPassThrough: true,
+                }}
+                scopeBullets={[
+                  v.system_type === "gravel"
+                    ? `Gravel trench system: bedding ${v.bedding_under_pipe_ft} ft under pipe, ${v.cover_gravel_over_pipe_ft} ft cover${v.use_fabric ? ", fabric on top" : ""}.`
+                    : `Chamber system: ${calc.chamber_units} units @ ${v.chamber_unit_length_ft} ft each; bedding ${v.chamber_bedding_ft} ft.`,
+                  `Field: ${v.field_total_length_ft} ft total length × ${v.trench_width_ft} ft wide × ${v.field_depth_ft} ft depth.`,
+                  `Tank excavation ~${v.tank_exc_L_ft} × ${v.tank_exc_W_ft} × ${v.tank_exc_D_ft} ft. D-box: ${v.d_box_count}, risers: ${v.riser_count}.`,
+                  `Piping: perforated ${v.perforated_pipe_length_ft} ft, solid ${v.solid_pipe_length_ft} ft @ Ø ${v.pipe_d_in}"`,
+                  `Haul-off ~${Math.round(v.haul_off_fraction*100)}% of spoils; truck ${v.truck_capacity_yd3} yd³; RT haul ${v.haul_round_trip_min} min.`,
+                ]}
+                inclusions={[
+                  "Excavation, bedding/chambers or gravel per spec",
+                  "Tank & d-box set and connection",
+                  "Piping, backfill, shaping",
+                  "Trucking/disposal as calculated",
+                  "Mobilization",
+                ]}
+                exclusions={[
+                  "Rock excavation or groundwater control/dewatering",
+                  "Shoring/boxes, perc tests/design/permits",
+                  "Electrical for pumps/alarms if required",
+                  "Traffic control beyond noted",
+                  "Items not specifically described",
+                ]}
+                printId="septic-bid"
+              />
+            </div>
+
+            <div className="mt-3 no-print">
+              <button onClick={downloadPDF} className="rounded-lg border px-3 py-2">
+                Download PDF
+              </button>
+            </div>
+          </Card>
+
           <Card title="Assumptions (auto-print on quote)">
             <ul className="list-disc ml-5 text-sm">
               <li>{v.system_type === "gravel"
@@ -348,6 +475,11 @@ export default function NewSepticEstimate() {
           </Card>
         </section>
       </div>
+
+      {/* Print/export CSS for PDF capture (hide buttons, etc.) */}
+      <style jsx global>{`
+        .exporting .no-print { display: none !important; }
+      `}</style>
     </main>
   );
 }
